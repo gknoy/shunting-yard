@@ -7,7 +7,7 @@ import math
 import operator
 
 from functions import div
-from tokenizer import tokenize, enrich, Paren
+from tokenizer import tokenize, enrich, Special
 
 
 @pytest.mark.parametrize(
@@ -31,9 +31,10 @@ def test_tokenize(input, expected):
         (["/"], [div]),
         (["^"], [operator.pow]),
         (["3", "+", "4"], [3, operator.add, 4]),
+        (["(", ",", ")"], [Special.PAREN_LEFT, Special.COMMA, Special.PAREN_RIGHT]),
         (
             ["302", "+", "sqrt", "(", "400", ")"],
-            [302, operator.add, math.sqrt, Paren.LEFT, 400, Paren.RIGHT],
+            [302, operator.add, math.sqrt, Special.PAREN_LEFT, 400, Special.PAREN_RIGHT],
         ),
         # numeric stuff
         (["123456", "pi", "π", "2.12"], [123456, math.pi, math.pi, 2.12]),

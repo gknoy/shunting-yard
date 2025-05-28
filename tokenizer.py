@@ -25,9 +25,8 @@ from functions import div
 # =========================
 
 CHAR_TYPES = {
-    "paren": {"(", ")"},  # "[", "]", "{", "}"},
+    "special": {"(", ")", ",", "π"},  # "[", "]", "{", "}"},
     "operator": set(list("+-*/^÷×")),
-    "special": {"π"},
     "numeric": set(list("0123456789.")),  # TODO: support "3e4" notation
     # Letters can be used to name functions, e.g. "sin"
     # If we can't find a function w/ that name,
@@ -40,10 +39,9 @@ CHAR_TYPES = {
 # TODO: define a TokenType enum if needed
 TOKEN_TYPES = {
     # character -> str
-    **{char: "paren" for char in CHAR_TYPES["paren"]},
+    **{char: "special" for char in CHAR_TYPES["special"]},
     **{char: "operator" for char in CHAR_TYPES["operator"]},
     **{char: "number" for char in CHAR_TYPES["numeric"]},
-    **{char: "special" for char in CHAR_TYPES["special"]},
     **{char: "function" for char in CHAR_TYPES["letter"]},
     **{char: "whitespace" for char in CHAR_TYPES["whitespace"]},
 }
@@ -87,19 +85,24 @@ def tokenize(input: str) -> Iterator[str]:
 ## =========================
 
 
-class Paren(Enum):
-    LEFT = "("
-    RIGHT = ")"
+class Special(Enum):
+    PAREN_LEFT = "("
+    PAREN_RIGHT = ")"
+    COMMA = ","
 
-    @classmethod
-    def match(cls, s):
-        for item in [cls.LEFT, cls.RIGHT]:
-            if item.value == s:
-                return item
-        return None
+    # FIXME REMOVE: we don't need this as we have entity map
+    # @classmethod
+    # def match(cls, s):
+    #     for item in [cls.PAREN_LEFT, cls.PAREN_RIGHT]:
+    #         if item.value == s:
+    #             return item
+    #     return None
 
 
 entity_mapping = {
+    "(": Special.PAREN_LEFT,
+    ")": Special.PAREN_RIGHT,
+    ",": Special.COMMA,
     # Unlike the built-in ** operator, math.pow() converts
     # both its arguments to type float. Use ** or the built-in pow()
     # function for computing exact integer powers.
@@ -146,15 +149,10 @@ def enrich(items: Iterator[str]) -> Iterator:
             yield math.pi
             continue
 
-        maybe_paren = Paren.match(item)
-        if maybe_paren:
-            yield maybe_paren
-            continue
-
-        func = entity_mapping.get(item, None)
-        if func is None:
+        entity = entity_mapping.get(item, None)
+        if entity is None:
             # try to look it up in math
-            func = getattr(math, item, None)
-        if func is None:
+            entity = getattr(math, item, None)
+        if entity is None:
             raise NotImplementedError
-        yield func
+        yield entity

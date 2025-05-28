@@ -8,7 +8,7 @@ from operator import add, mul  # , pow
 from math import pi, sin
 
 from functions import div
-from tokenizer import tokenize, enrich, Paren
+from tokenizer import tokenize, enrich, Special
 from shunting_yard import get_rpn_tokens, eval_rpn
 
 
@@ -19,8 +19,8 @@ from shunting_yard import get_rpn_tokens, eval_rpn
         (
             "sin ( max ( 2, 3 ) ÷ 3 × π )",
             [
-                sin, Paren.LEFT, max, Paren.LEFT, 2, 3, Paren.RIGHT,
-                div, 3, mul, pi, Paren.RIGHT,
+                sin, Special.PAREN_LEFT, max, Special.PAREN_LEFT, 2, 3, Special.PAREN_RIGHT,
+                div, 3, mul, pi, Special.PAREN_RIGHT,
             ],
         ),
     ],
@@ -42,8 +42,8 @@ def test_get_rpn_tokens(input, expected):
         (
             # "sin ( max ( 2, 3 ) ÷ 3 × π )"
             [
-                sin, Paren.LEFT, max, Paren.LEFT, 2, 3, Paren.RIGHT,
-                div, 3, mul, pi, Paren.RIGHT,
+                sin, Special.PAREN_LEFT, max, Special.PAREN_LEFT, 2, 3, Special.PAREN_RIGHT,
+                div, 3, mul, pi, Special.PAREN_RIGHT,
             ],
             0,
         ),
