@@ -4,9 +4,16 @@
 # split a stream of stuff into a stream of strings, and then enrich those into meaningful values
 """
 
-from enum import Enum
-from typing import Iterator
 import math
+import operator
+from enum import Enum
+
+# I feel like it's clearer to use 'operator.add' later on
+# from math import sin, cos, tan, sqrt
+# from operator import abs, add, sub, mul, pow
+from typing import Iterator
+
+from functions import div
 
 
 # =========================
@@ -60,6 +67,12 @@ def tokenize(input: str) -> Iterator[str]:
                 yield token
             token = f"{c}"
             token_type = char_type
+        elif token_type == operator:
+            # return the previous operator we saw,
+            # since we can't have multi-char operators.
+            # (use "^" instead of "**")
+            if token_type == "operator":
+                yield token
         else:
             # same token so concat them
             token = f"{token}{c}"
@@ -72,6 +85,35 @@ def tokenize(input: str) -> Iterator[str]:
 ## =========================
 
 
+class Paren(Enum):
+    LEFT = "("
+    RIGHT = ")"
+
+    @classmethod
+    def match(cls, s):
+        for item in [cls.LEFT, cls.RIGHT]:
+            if item.value == s:
+                return item
+        return None
+
+
+function_mapping = {
+    # Unlike the built-in ** operator, math.pow() converts
+    # both its arguments to type float. Use ** or the built-in pow()
+    # function for computing exact integer powers.
+    "^": operator.pow,
+    "/": div,
+    "*": operator.mul,
+    "+": operator.add,
+    "-": operator.sub,
+    # TODO: idk how to differentiate negative numbers
+    #   Ideally we do this during enrichment, so "3--4" -> [3, sub, -4]
+    "abs": operator.abs,
+    "%": operator.mod,
+    # otherwise, default to getattr(math, func_name)
+}
+
+
 def enrich(items: Iterator[str]) -> Iterator:
     """
     Given a sequence of string tokens, replace them with Useful Shit
@@ -81,11 +123,21 @@ def enrich(items: Iterator[str]) -> Iterator:
     """
     for item in items:
         try:
-            i = int(item)
-            yield i
+            number = int(item)
+            yield number
+            continue
         except:
-            raise NotImplementedError
             pass
 
-        # TODO: replace operators ("+") with operation functions
-        # TODO: replace math functions ("sin", "abs") with math functions
+        maybe_paren = Paren.match(item)
+        if maybe_paren:
+            yield maybe_paren
+            continue
+
+        func = function_mapping.get(item, None)
+        if func is None:
+            # try to look it up in math
+            func = getattr(math, item, None)
+        if func is None:
+            raise NotImplementedError
+        yield func
