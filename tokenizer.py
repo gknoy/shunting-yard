@@ -123,11 +123,22 @@ def enrich(items: Iterator[str]) -> Iterator:
     """
     for item in items:
         try:
-            number = int(item)
+            number = int(item)  # todo: handle floats or ints
             yield number
             continue
         except:
             pass
+
+        try:
+            number = float(item)
+            yield number
+            continue
+        except:
+            pass
+
+        if item == "pi":
+            yield math.pi
+            continue
 
         maybe_paren = Paren.match(item)
         if maybe_paren:
