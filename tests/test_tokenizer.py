@@ -36,7 +36,7 @@ def test_tokenize(input, expected):
             [302, operator.add, math.sqrt, Paren.LEFT, 400, Paren.RIGHT],
         ),
         # numeric stuff
-        (["123456", "pi", "2.12"], [123456, math.pi, 2.12]),
+        (["123456", "pi", "π", "2.12"], [123456, math.pi, math.pi, 2.12]),
     ],
 )
 def test_enrich(input, expected):
