@@ -17,7 +17,9 @@ def div(a: number, b: number) -> number:
     return a / b
 
 
-# TODO: create a number class to wrap numeric types, if we ever need that?
+# unary negation
+def neg(a: number) -> number:
+    return -1 * number
 
 
 class Special(Enum):
@@ -43,15 +45,36 @@ class Callable:
 
 class Operator(Callable):
     """
-    Operator is treated as a two-argument function,
-    except maybe for then `!` wouldn't work
+    Operator is a callable that assumes either two arguments (a f b) or operand (f a)
+    However, some operators (factorial) come AFTER the operand, and some (neg) come before.
+
+    unary: "left" if operator left of operand
+           "right" if operator right of operand
+
+    e.g.
+        3 - 5  # unary False
+          - 5  # unary left
+        3 !    # unary right
     """
 
-    pass
+    def __init__(
+        self, function: callable, associativity="left", n_args=2, unary: bool | str = False
+    ):
+        super().__init__(function, associativity, n_args)
+        assert unary in (False, "left", "right")
+        self.unary = unary
 
 
 class Function(Callable):
-    """Wrap a callable, e.g. math.abs or math.gcd"""
+    """
+    Wrap a callable, e.g. math.abs or math.gcd
+    Syntactically, we expect "{function}({arg}, {arg2})",
+    But honestly I don't see how this is different from an Operator other
+    than that Operators are written infix (or prefix), whereas have parens after them and optional comma separated args
+
+    min(a b)
+    min(a,b)  # optional comma
+    """
 
     pass
 
@@ -59,7 +82,7 @@ class Function(Callable):
 entity_mapping = {
     "(": Special.PAREN_LEFT,
     ")": Special.PAREN_RIGHT,
-    ",": Special.COMMA,
+    ",": Special.COMMA,  # used in some function calls, e.g. max(a, b)
     # Unlike the built-in ** operator, math.pow() converts
     # both its arguments to type float. Use ** or the built-in pow()
     # function for computing exact integer powers.
@@ -71,13 +94,16 @@ entity_mapping = {
     "+": Operator(operator.add),
     "-": Operator(operator.sub),
     "%": Operator(operator.mod),
+    "neg": Operator(neg, n_args=1, unary="left"),
+    "~": Operator(neg, n_args=1, unary="left"),
+    "!": Operator(math.factorial, n_args=1, unary="right"),
     # abs isn't infix so we don't consider it an "operator"
     "abs": Function(operator.abs, n_args=1),
     "sqrt": Function(math.sqrt, n_args=1),
     # numeric literals
     "π": math.pi,
     "pi": math.pi,
-    # otherwise, default to getattr(math, func_name)
+    # otherwise, we default to getattr(math, func_name)
 }
 
 
@@ -95,3 +121,19 @@ def get_entity(token: str) -> Entity:
             # this will not work if math_func only takes one arg
             return Function(math_func)
     return entity
+
+
+def render(entity):
+    # renders the first-encountered entity (in case we have two names)
+    for name, e in entity_mapping.items():
+        if type(e) is type(entity) and e == entity:
+            return name
+    # fallback for something we didn't specify:
+    if type(entity) is Function or type(entity) is Operator:
+        return entity.function.__name__
+    if type(entity) in [int, float]:
+        return entity
+
+
+def get_precedence(op: Operator | Function) -> int:
+    raise NotImplementedError

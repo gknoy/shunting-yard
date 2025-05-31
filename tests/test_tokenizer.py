@@ -15,7 +15,9 @@ from tokenizer import tokenize, enrich
     "input, expected",
     [
         ("3+-4", ["3", "+", "-4"]),
-        ("302 + sin(-400)", ["302", "+", "sin", "(", "-400", ")"]),
+        ("3e2 + sin(-400)", ["3e2", "+", "sin", "(", "-400", ")"]),
+        # verify we can differentiate minus (subtraction) from unary minus (negation)
+        ("---5", ["-", "-", "-", "5"])("---5", ["neg", "neg", "neg", "5"]),
     ],
 )
 def test_tokenize(input, expected):

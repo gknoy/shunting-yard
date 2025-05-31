@@ -19,6 +19,7 @@ from shunting_yard import get_rpn_tokens, eval_rpn
         (
             "sin ( max ( 2, 3 ) ÷ 3 × π )",
             [
+                # FIXME this is the wrong order, this was the input order
                 sin, Special.PAREN_LEFT, max, Special.PAREN_LEFT, 2, 3, Special.PAREN_RIGHT,
                 div, 3, mul, pi, Special.PAREN_RIGHT,
             ],

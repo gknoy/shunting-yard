@@ -46,6 +46,50 @@ def tokenize(input: str) -> Iterator[str]:
     Tokens have a type, exact_type, and a string field.
 
     I want intercept MINUS tokens and yield negative numbers if the minus is followed by a number.
+
+    FIXME: This is completely fucked at trying to recognize negative numbers. :)
+    I'm going to see if I can represent a unary minus as a NEG function in the token stream, or if
+
+    Pathological examples:
+
+    -----3  -> 5x NEG
+
+    sin(-----5)
+        ^
+
+    3- --5
+    3+ --5
+     o mm
+
+    # === misc crap ===
+
+      - - - 4  # bad
+      - - 4    # [-, -4]
+      - 4      # [ -, 4 ]  (*e.g. from 3 - 4)
+      - pi     # [ -pi ]  (any number or the literals "pi" or "π")
+      - (      # [-, LPAR]
+     sin(-4)
+     3-4
+
+      a b c d e f g h i j
+            ^
+      [7 - -]4
+
+     -----5
+     is the same as
+     (-(-(-(-(-5)))))
+
+    3 - ------5  -> [3, -, -, -, -, -, -, -, 5]
+                        ^  ^^^^^^^^^^^^^^^^
+                      sub   5 x NEG
+    o: [3]
+    s: [-, NEG]
+
+    - have i seen an operand yet?
+    - or, is this the first minus since START _or_ the most recent LPAREN
+
+    "---5" -> ["-5"]
+    "sin(-5) -> [sin, (, -5, )]
     """
     # the builtin tokenize.tokenize reads from the readline method of
     # an input stream instance.  Super weird to use in this way :)
@@ -53,40 +97,27 @@ def tokenize(input: str) -> Iterator[str]:
 
     # The minus tokens we haven't yet yielded.
     # When we see a minus, we don't yield it until we know whether we
-    # have a negative number.
-    # e.g.
-    #   - - - 4  # bad
-    #   - - 4    # [-, -4]
-    #   - 4      # [ -4 ]
-    #   - pi     # [ -pi ]  (any number or the literals "pi" or "π")
-    #   - (      # [-, LPAR]
+    # have a negative number.  FIXME this isnt quite right
+
     minuses = []
     pies = {"pi", "π"}
 
     for token in token_stream:
-        print(f">>> {token}")
         if token.type in {ENCODING, NEWLINE, ENDMARKER}:
-            print("skipping token")
             continue
         if token.exact_type == MINUS:
-            print(" Stashing minus token")
             minuses.append(token)
             continue  # we don't know whether to yield things
         if token.type == NUMBER or token.string in pies:
             if len(minuses):
                 for minus in minuses[:-1]:
-                    print(f" --> yielding '-'")
                     yield "-"
-                print(f" --> yielding {token}")
                 yield f"-{token.string}"
             else:
-                print(f" --> yielding {token}")
                 yield token.string
         else:
             for minus in minuses[:-1]:
-                print(f" --> yielding '-'")
                 yield "-"
-            print(f" --> yielding {token}")
             yield token.string
 
 
