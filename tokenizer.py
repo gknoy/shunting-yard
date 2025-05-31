@@ -2,18 +2,33 @@
 # tokenizer.py
 #
 # split a stream of stuff into a stream of strings, and then enrich those into meaningful values
+#
+# Uses python's builtin tokenize.tokenize to get tokens, which auto-handles finding numbers and names and parens
+#
+#    In [51]: tokens = list(tokenize(BytesIO("-3e2 - -4.3 * sin(π)".encode("utf-8")).readline))
+#    In [52]: tokens
+#    Out[52]:
+#    [TokenInfo(type=65 (ENCODING), string='utf-8', start=(0, 0), end=(0, 0), line=''),
+#    TokenInfo(type=55 (OP), string='-', start=(1, 0), end=(1, 1), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=2 (NUMBER), string='3e2', start=(1, 1), end=(1, 4), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=55 (OP), string='-', start=(1, 5), end=(1, 6), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=55 (OP), string='-', start=(1, 7), end=(1, 8), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=2 (NUMBER), string='4.3', start=(1, 8), end=(1, 11), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=55 (OP), string='*', start=(1, 12), end=(1, 13), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=1 (NAME), string='sin', start=(1, 14), end=(1, 17), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=55 (OP), string='(', start=(1, 17), end=(1, 18), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=1 (NAME), string='π', start=(1, 18), end=(1, 19), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=55 (OP), string=')', start=(1, 19), end=(1, 20), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=4 (NEWLINE), string='', start=(1, 20), end=(1, 21), line='-3e2 - -4.3 * sin(π)'),
+#    TokenInfo(type=0 (ENDMARKER), string='', start=(2, 0), end=(2, 0), line='')]
 """
 
-import math
-import operator
-from enum import Enum
-
-# I feel like it's clearer to use 'operator.add' later on
-# from math import sin, cos, tan, sqrt
-# from operator import abs, add, sub, mul, pow
+from io import BytesIO
+from token import *
+from tokenize import tokenize as builtin_tokenize
 from typing import Iterator
 
-from functions import div
+from entities import get_entity
 
 
 # =========================
@@ -24,135 +39,83 @@ from functions import div
 # differ from neighbors (e.g. "3+4" -> ["3", "+", "4"])
 # =========================
 
-CHAR_TYPES = {
-    "special": {"(", ")", ",", "π"},  # "[", "]", "{", "}"},
-    "operator": set(list("+-*/^÷×")),
-    "numeric": set(list("0123456789.")),  # TODO: support "3e4" notation
-    # Letters can be used to name functions, e.g. "sin"
-    # If we can't find a function w/ that name,
-    # that will be an error during enrichment
-    "letter": set(list("abcdefghijklmnopqrstuvwxyz")),
-    "whitespace": {" ", "\t", "\n"},
-}
-
-
-# TODO: define a TokenType enum if needed
-TOKEN_TYPES = {
-    # character -> str
-    **{char: "special" for char in CHAR_TYPES["special"]},
-    **{char: "operator" for char in CHAR_TYPES["operator"]},
-    **{char: "number" for char in CHAR_TYPES["numeric"]},
-    **{char: "function" for char in CHAR_TYPES["letter"]},
-    **{char: "whitespace" for char in CHAR_TYPES["whitespace"]},
-}
-
-# def classify_char(c: str, char_types) -> str | None:
-#     for key, values in char_types.items():
-#         if c in values:
-#             return key
-#     return None
-
 
 def tokenize(input: str) -> Iterator[str]:
-    token = None
-    token_type = None
-    for c in input:
-        if c not in TOKEN_TYPES:
-            raise f"Unrecognized token character: {c}"
-        char_type = TOKEN_TYPES[c]
-        # TODO: Maybe use multiple valid token types for a char,
-        #       so that seeing 'e' can be used in numbers or
-        if char_type != token_type:
-            if token is not None and token_type != "whitespace":
-                yield token
-            token = f"{c}"
-            token_type = char_type
-        elif token_type in ["operator", "special"]:
-            # return the previous operator we saw,
-            # since we can't have multi-char operators.
-            # (use "^" instead of "**")
-            # (pi is included here)
-            yield token
+    """
+    Use the builtin tokenize.tokenize to get a stream of tokens
+    Tokens have a type, exact_type, and a string field.
+
+    I want intercept MINUS tokens and yield negative numbers if the minus is followed by a number.
+    """
+    # the builtin tokenize.tokenize reads from the readline method of
+    # an input stream instance.  Super weird to use in this way :)
+    token_stream = builtin_tokenize(BytesIO(input.encode("utf-8")).readline)
+
+    # The minus tokens we haven't yet yielded.
+    # When we see a minus, we don't yield it until we know whether we
+    # have a negative number.
+    # e.g.
+    #   - - - 4  # bad
+    #   - - 4    # [-, -4]
+    #   - 4      # [ -4 ]
+    #   - pi     # [ -pi ]  (any number or the literals "pi" or "π")
+    #   - (      # [-, LPAR]
+    minuses = []
+    pies = {"pi", "π"}
+
+    for token in token_stream:
+        print(f">>> {token}")
+        if token.type in {ENCODING, NEWLINE, ENDMARKER}:
+            print("skipping token")
+            continue
+        if token.exact_type == MINUS:
+            print(" Stashing minus token")
+            minuses.append(token)
+            continue  # we don't know whether to yield things
+        if token.type == NUMBER or token.string in pies:
+            if len(minuses):
+                for minus in minuses[:-1]:
+                    print(f" --> yielding '-'")
+                    yield "-"
+                print(f" --> yielding {token}")
+                yield f"-{token.string}"
+            else:
+                print(f" --> yielding {token}")
+                yield token.string
         else:
-            # same token so concat them
-            token = f"{token}{c}"
-    # final token ;)
-    yield token
+            for minus in minuses[:-1]:
+                print(f" --> yielding '-'")
+                yield "-"
+            print(f" --> yielding {token}")
+            yield token.string
 
 
 # =========================
 # Enrichment
 ## =========================
 
-
-class Special(Enum):
-    PAREN_LEFT = "("
-    PAREN_RIGHT = ")"
-    COMMA = ","
-
-    # FIXME REMOVE: we don't need this as we have entity map
-    # @classmethod
-    # def match(cls, s):
-    #     for item in [cls.PAREN_LEFT, cls.PAREN_RIGHT]:
-    #         if item.value == s:
-    #             return item
-    #     return None
+# FIXME: Move special + operators to functions.py -> rename operators.py
 
 
-entity_mapping = {
-    "(": Special.PAREN_LEFT,
-    ")": Special.PAREN_RIGHT,
-    ",": Special.COMMA,
-    # Unlike the built-in ** operator, math.pow() converts
-    # both its arguments to type float. Use ** or the built-in pow()
-    # function for computing exact integer powers.
-    "^": operator.pow,
-    "/": div,
-    "÷": div,
-    "*": operator.mul,
-    "×": operator.mul,
-    "+": operator.add,
-    "-": operator.sub,
-    # TODO: idk how to differentiate negative numbers
-    #   Ideally we do this during enrichment, so "3--4" -> [3, sub, -4]
-    "abs": operator.abs,
-    "%": operator.mod,
-    "π": math.pi,
-    "pi": math.pi,
-    # otherwise, default to getattr(math, func_name)
-}
-
-
-def enrich(items: Iterator[str]) -> Iterator:
+def enrich(tokens: Iterator[str]) -> Iterator:
     """
     Given a sequence of string tokens, replace them with Useful Shit
-        numbers
-        math functions
-        operators (TODO: fix right associative exponents ;))
     """
-    for item in items:
+    # Note: this expects incoming tokens to already have negativeness applied
+    for token in tokens:
         try:
-            number = int(item)  # todo: handle floats or ints
+            number = int(token)  # todo: handle floats or ints
             yield number
             continue
         except:
             pass
 
         try:
-            number = float(item)
+            number = float(token)
             yield number
             continue
         except:
             pass
 
-        if item == "pi":
-            yield math.pi
-            continue
-
-        entity = entity_mapping.get(item, None)
-        if entity is None:
-            # try to look it up in math
-            entity = getattr(math, item, None)
-        if entity is None:
-            raise NotImplementedError
-        yield entity
+        # get a function, named constant, operator, or Paren
+        yield get_entity(token)
