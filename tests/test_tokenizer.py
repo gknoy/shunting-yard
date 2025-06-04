@@ -33,7 +33,7 @@ def test_tokenize(input, expected):
 @pytest.mark.parametrize(
     "input,expected",
     [
-        (["abs"], [Fn(abs)]),
+        (["abs"], [Fn(abs, arity=1)]),
         (["+"], [Op(add)]),
         (["*"], [Op(mul)]),
         (["/"], [Op(div)]),
@@ -45,7 +45,7 @@ def test_tokenize(input, expected):
             [
                 302,
                 Op(add),
-                Fn(sqrt),
+                Fn(sqrt, arity=1),
                 Special.PAREN_LEFT,
                 400,
                 Special.PAREN_RIGHT,
