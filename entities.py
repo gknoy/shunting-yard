@@ -19,7 +19,7 @@ def div(a: number, b: number) -> number:
 
 
 # unary negation
-def neg(a: number) -> number:
+def _neg(a: number) -> number:
     return -1 * a
 
 
@@ -42,7 +42,7 @@ class Callable:
     ):
         self.function = function
         self.associativity = associativity
-        self.n_args = n_args  # consumers should check this before passing args
+        self.arity = n_args  # consumers should check this before passing args
         self.rendered = rendered  # e.g. negation
 
     def __call__(self, *args):
@@ -52,11 +52,11 @@ class Callable:
         return (
             self.function == other.function
             and self.associativity == other.associativity
-            and self.n_args == other.n_args
+            and self.arity == other.n_args
         )
 
     def __repr__(self):
-        return f"fn={self.function} assoc={self.associativity} n_args={self.n_args}"
+        return f"fn={self.function} assoc={self.associativity} n_args={self.arity}"
 
 
 class Operator(Callable):
@@ -70,18 +70,18 @@ class Operator(Callable):
     e.g.
         3 - 5  # unary False
           - 5  # unary left
-        3 !    # unary right
+        3 !    # unary right  # TODO: not supported yet
     """
 
     def __init__(
         self,
         function: callable,  # ty: ignore[invalid-type-form]
         associativity="left",
-        n_args=2,
+        arity=2,
         unary: bool | str = False,
         **kwargs,
     ):
-        super().__init__(function, associativity, n_args, **kwargs)
+        super().__init__(function, associativity, arity, **kwargs)
         assert unary in (False, "left", "right")
         self.unary = unary
 
@@ -90,7 +90,7 @@ class Operator(Callable):
             type(self) is type(other)
             and self.function == other.function
             and self.associativity == other.associativity
-            and self.n_args == other.n_args
+            and self.arity == other.arity
             and self.unary == other.unary
         )
 
@@ -111,7 +111,7 @@ class Function(Callable):
             type(self) is type(other)
             and self.function == other.function
             and self.associativity == other.associativity
-            and self.n_args == other.n_args
+            and self.arity == other.arity
         )
 
 
@@ -119,8 +119,9 @@ class Function(Callable):
 # Negation / Subtraction
 # ------
 
-neg_op = Operator(neg, n_args=1, unary="left", rendered="neg")
-
+# Named operators so enrichment can use them when it finds a Special.MINUS
+neg = Operator(_neg, arity=1, unary="left", rendered="neg")
+subtract = Operator(operator.sub)
 
 entity_mapping = {
     "(": Special.PAREN_LEFT,
@@ -135,9 +136,9 @@ entity_mapping = {
     "÷": Operator(div),
     "*": Operator(operator.mul),
     "×": Operator(operator.mul),
-    "+": Operator(operator.add),
-    "-": Operator(operator.sub),
     "%": Operator(operator.mod),
+    "+": Operator(operator.add),
+    # "-": Operator(operator.sub),
     # "neg": Operator(neg, n_args=1, unary="left"),
     # "~": Operator(neg, n_args=1, unary="left"),
     # abs isn't infix so we don't consider it an "operator"

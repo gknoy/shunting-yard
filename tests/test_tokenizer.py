@@ -4,9 +4,9 @@
 
 import pytest
 from math import pi, sqrt
-from operator import add, sub, mul, pow, abs
+from operator import add, mul, pow, abs
 
-from entities import div, neg, Special, Operator as Op, Function as Fn
+from entities import div, Special, Operator as Op, Function as Fn, neg, subtract
 from tokenizer import tokenize, enrich
 
 
@@ -64,14 +64,14 @@ def test_enrich(input, expected):
     "input,expected",
     [
         # a - b yields sutraction
-        (["3", "-", "4"], [3, Op(sub), 4]),
+        (["3", "-", "4"], [3, subtract, 4]),
         # leading - means negation
-        (["-", "5"], [Op(neg), 5]),
+        (["-", "5"], [neg, 5]),
         # odd neg counts get left as is because we are
         # heathens who don't care about efficiency ;D
-        (["-", "-", "-", "5"], [Op(neg), Op(neg), Op(neg), 5]),
+        (["-", "-", "-", "5"], [neg, neg, neg, 5]),
         # evens do not cancel out because we'll do the math during eval
-        (["-", "-", "5"], [Op(neg), Op(neg), 5]),
+        (["-", "-", "5"], [neg, neg, 5]),
     ],
 )
 def test_enrich_negation(input, expected):

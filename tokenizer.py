@@ -28,7 +28,7 @@ from token import ENCODING, NEWLINE, ENDMARKER, MINUS, NUMBER
 from tokenize import tokenize as builtin_tokenize
 from typing import Iterator
 
-from entities import get_entity
+from entities import get_entity, Special, Operator, neg, subtract
 
 
 # =========================
@@ -44,85 +44,14 @@ def tokenize(input: str) -> Iterator[str]:
     """
     Use the builtin tokenize.tokenize to get a stream of tokens
     Tokens have a type, exact_type, and a string field.
-
-    I want intercept MINUS tokens and yield negative numbers if the minus is followed by a number.
-
-    FIXME: This is completely fucked at trying to recognize negative numbers. :)
-    I'm going to see if I can represent a unary minus as a NEG function in the token stream,
-    or instead do this conversion later
-
-    Pathological examples:
-
-    -----3  -> 5x NEG
-
-    sin(-----5)
-        ^
-
-    3- --5
-    3+ --5
-     o mm
-
-    # === misc crap ===
-
-      - - - 4  # bad
-      - - 4    # [-, -4]
-      - 4      # [ -, 4 ]  (*e.g. from 3 - 4)
-      - pi     # [ -pi ]  (any number or the literals "pi" or "π")
-      - (      # [-, LPAR]
-     sin(-4)
-     3-4
-
-      a b c d e f g h i j
-            ^
-      [7 - -]4
-
-     -----5
-     is the same as
-     (-(-(-(-(-5)))))
-
-    3 - ------5  -> [3, -, -, -, -, -, -, -, 5]
-                        ^  ^^^^^^^^^^^^^^^^
-                      sub   5 x NEG
-    o: [3]
-    s: [-, NEG]
-
-    - have i seen an operand yet?
-    - or, is this the first minus since START _or_ the most recent LPAREN
-
-    "---5" -> ["-5"]
-    "sin(-5) -> [sin, (, -5, )]
     """
     # the builtin tokenize.tokenize reads from the readline method of
     # an input stream instance.  Super weird to use in this way :)
     token_stream = builtin_tokenize(BytesIO(input.encode("utf-8")).readline)
-
-    # The minus tokens we haven't yet yielded.
-    # When we see a minus, we don't yield it until we know whether we
-    # have a negative number.  FIXME this isnt quite right
-
-    minuses = []
-    pies = {"pi", "π"}
-
     for token in token_stream:
         if token.type in {ENCODING, NEWLINE, ENDMARKER}:
             continue
         yield token.string
-        # Deprecated: Make sense of negative signs during enrichment instead
-        # if token.exact_type == MINUS:
-        #     minuses.append(token)
-        #     continue  # we don't know whether to yield things
-        # if token.type == NUMBER or token.string in pies:
-        #     if len(minuses):
-        #         for _ in minuses:
-        #             yield "-"
-        #         yield f"-{token.string}"
-        #     else:
-        #         minuses = []
-        #         yield token.string
-        # else:
-        #     for minus in minuses[:-1]:
-        #         yield "-"
-        #     yield token.string
 
 
 # =========================
@@ -133,11 +62,29 @@ def tokenize(input: str) -> Iterator[str]:
 def enrich(tokens: Iterator[str]) -> Iterator:
     """
     Given a sequence of string tokens, replace them with Useful Shit
+    - numbers
+    - math operators -> functions
+    - math functions -> functions
+    - minuses -> neg or subtract functions (which have different arity)
+
+        I want intercept MINUS tokens and yield negative numbers if the minus is followed by a number.
+
+    FIXME: This is completely fucked at trying to recognize negative numbers. :)
+
+     -----5
+     is the same as
+     (-(-(-(-(-5)))))
+
+    I'd like to replace e.g. "---5" -> ["-5"]
+    but instead i can just pass `neg` on to the calculation and leave it be.
+    "sin(-5) -> [sin, (, -5, )]
     """
-    # Note: this expects incoming tokens to already have negativeness applied
-    for token in tokens:
+    _last = None  # the last non-minus token we've seen.
+
+    for index, token in enumerate(tokens):
         try:
             number = int(token)  # todo: handle floats or ints
+            _last = number
             yield number
             continue
         except:
@@ -145,10 +92,34 @@ def enrich(tokens: Iterator[str]) -> Iterator:
 
         try:
             number = float(token)
+            _last = number
             yield number
             continue
         except:
             pass
 
         # get a function, named constant, operator, or Paren
-        yield get_entity(token)
+        entity = get_entity(token)
+
+        if entity == Special.MINUS:
+            if (
+                index == 0  # first token
+                or _last is None  # nth minus in a row since start
+                or _last == Special.PAREN_LEFT
+                or (type(_last) is Operator and _last != neg)
+            ):
+                entity = neg
+
+            elif (
+                # - we follow a number or a closed paren
+                type(_last) is int or type(_last) is float or _last == Special.PAREN_RIGHT
+            ):
+                entity = subtract
+            else:
+                raise Exception(f"invalid: {entity}, prev non-minus: {_last}")
+            yield entity
+            continue
+
+        # otherwise, we have a pi or an operator:
+        _last = entity
+        yield entity

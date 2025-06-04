@@ -6,7 +6,7 @@ import pytest
 from operator import add, mul  # , pow
 from math import pi, sin
 
-from entities import div, neg, Special, Operator as Op, Function as Fn, render_tokens
+from entities import div, _neg, Special, Operator as Op, Function as Fn, render_tokens
 from shunting_yard import get_rpn_tokens, eval_rpn
 from tokenizer import tokenize, enrich
 
@@ -72,7 +72,7 @@ def test_get_rendered_rpn_tokens(input, expected):
     "input, expected",
     [
         ([3, 4, Op(add)], 7),
-        ([3, 4, Fn(neg), add], -1),
+        ([3, 4, Fn(_neg), add], -1),
         (
             # "sin ( max ( 2, 3 ) ÷ 3 × π )"
             [
