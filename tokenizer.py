@@ -24,7 +24,7 @@
 """
 
 from io import BytesIO
-from token import *
+from token import ENCODING, NEWLINE, ENDMARKER, MINUS, NUMBER
 from tokenize import tokenize as builtin_tokenize
 from typing import Iterator
 
@@ -48,7 +48,8 @@ def tokenize(input: str) -> Iterator[str]:
     I want intercept MINUS tokens and yield negative numbers if the minus is followed by a number.
 
     FIXME: This is completely fucked at trying to recognize negative numbers. :)
-    I'm going to see if I can represent a unary minus as a NEG function in the token stream, or if
+    I'm going to see if I can represent a unary minus as a NEG function in the token stream,
+    or instead do this conversion later
 
     Pathological examples:
 
@@ -105,27 +106,28 @@ def tokenize(input: str) -> Iterator[str]:
     for token in token_stream:
         if token.type in {ENCODING, NEWLINE, ENDMARKER}:
             continue
-        if token.exact_type == MINUS:
-            minuses.append(token)
-            continue  # we don't know whether to yield things
-        if token.type == NUMBER or token.string in pies:
-            if len(minuses):
-                for minus in minuses[:-1]:
-                    yield "-"
-                yield f"-{token.string}"
-            else:
-                yield token.string
-        else:
-            for minus in minuses[:-1]:
-                yield "-"
-            yield token.string
+        yield token.string
+        # Deprecated: Make sense of negative signs during enrichment instead
+        # if token.exact_type == MINUS:
+        #     minuses.append(token)
+        #     continue  # we don't know whether to yield things
+        # if token.type == NUMBER or token.string in pies:
+        #     if len(minuses):
+        #         for _ in minuses:
+        #             yield "-"
+        #         yield f"-{token.string}"
+        #     else:
+        #         minuses = []
+        #         yield token.string
+        # else:
+        #     for minus in minuses[:-1]:
+        #         yield "-"
+        #     yield token.string
 
 
 # =========================
 # Enrichment
 ## =========================
-
-# FIXME: Move special + operators to functions.py -> rename operators.py
 
 
 def enrich(tokens: Iterator[str]) -> Iterator:

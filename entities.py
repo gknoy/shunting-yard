@@ -7,6 +7,7 @@
 import math
 import operator
 from enum import Enum
+from typing import Iterable
 
 
 number = int | float
@@ -40,7 +41,14 @@ class Callable:
         return self.function(*args)
 
     def __eq__(self, other):
-        return self.function == other.function and self.associativity == other.associativity
+        return (
+            self.function == other.function
+            and self.associativity == other.associativity
+            and self.n_args == other.n_args
+        )
+
+    def __repr__(self):
+        return f"fn={self.function} assoc={self.associativity} n_args={self.n_args}"
 
 
 class Operator(Callable):
@@ -64,6 +72,15 @@ class Operator(Callable):
         assert unary in (False, "left", "right")
         self.unary = unary
 
+    def __eq__(self, other):
+        return (
+            type(self) is type(other)
+            and self.function == other.function
+            and self.associativity == other.associativity
+            and self.n_args == other.n_args
+            and self.unary == other.unary
+        )
+
 
 class Function(Callable):
     """
@@ -76,7 +93,13 @@ class Function(Callable):
     min(a,b)  # optional comma
     """
 
-    pass
+    def __eq__(self, other):
+        return (
+            type(self) is type(other)
+            and self.function == other.function
+            and self.associativity == other.associativity
+            and self.n_args == other.n_args
+        )
 
 
 entity_mapping = {
@@ -96,10 +119,13 @@ entity_mapping = {
     "%": Operator(operator.mod),
     "neg": Operator(neg, n_args=1, unary="left"),
     "~": Operator(neg, n_args=1, unary="left"),
-    "!": Operator(math.factorial, n_args=1, unary="right"),
+    # Disallow 5!, use factorial(5) instead
+    # mainly because I don't wat to handle "-5!"
+    # "!": Operator(math.factorial, n_args=1, unary="right"),
     # abs isn't infix so we don't consider it an "operator"
     "abs": Function(operator.abs, n_args=1),
     "sqrt": Function(math.sqrt, n_args=1),
+    "factorial": Function(math.factorial, n_args=1),
     # numeric literals
     "π": math.pi,
     "pi": math.pi,
@@ -123,7 +149,7 @@ def get_entity(token: str) -> Entity:
     return entity
 
 
-def render(entity):
+def render(entity: Entity) -> str:
     # renders the first-encountered entity (in case we have two names)
     for name, e in entity_mapping.items():
         if type(e) is type(entity) and e == entity:
@@ -133,6 +159,10 @@ def render(entity):
         return entity.function.__name__
     if type(entity) in [int, float]:
         return entity
+
+
+def render_tokens(entities: Iterable[Entity]) -> str:
+    return " ".join(render(e) for e in entities)
 
 
 def get_precedence(op: Operator | Function) -> int:

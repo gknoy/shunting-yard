@@ -3,31 +3,63 @@
 """
 
 import pytest
-
 from operator import add, mul  # , pow
 from math import pi, sin
 
-from entities import div
-from tokenizer import tokenize, enrich, Special
+from entities import div, neg, Special, Operator as Op, Function as Fn, render_tokens
 from shunting_yard import get_rpn_tokens, eval_rpn
+from tokenizer import tokenize, enrich
 
 
+# Formatting notes: test parametrization is sometimes hand-wrapped
+# so that they take up less vertical space, rather than how ruff would do it.
+
+# -------------
+# Shunting Yard: Process tokens into RPN order
+# -------------
+
+
+@pytest.mark.skip  # shunting yard NYI
 @pytest.mark.parametrize(
     "input, expected",
     [
-        ("3+4", [3, 4, add]),
+        ([3, Op(add), 4], [3, 4, add]),
         (
-            "sin ( max ( 2, 3 ) ÷ 3 × π )",
+            # "sin ( max ( 2, 3 ) ÷ 3 × π )",
             [
-                # FIXME this is the wrong order, this was the input order
-                sin, Special.PAREN_LEFT, max, Special.PAREN_LEFT, 2, 3, Special.PAREN_RIGHT,
+                sin, Special.PAREN_LEFT, max,
+                Special.PAREN_LEFT, 2, 3, Special.PAREN_RIGHT,
                 div, 3, mul, pi, Special.PAREN_RIGHT,
+            ],
+            # 2 3 max 3 ÷ π × sin
+            [
+                2, 3, Fn(max), 3, Op(div),
+                pi, Op(mul), Fn(sin),
             ],
         ),
     ],
 )  # fmt: skip
 def test_get_rpn_tokens(input, expected):
-    assert get_rpn_tokens(enrich(tokenize(input))) == expected
+    # TODO: This might be a LOT easier to read if we kept string inputs,
+    #       and then used render to get string version of the tokens.
+    assert expected == get_rpn_tokens(input)
+
+
+@pytest.mark.skip  # shunting yard NYI
+@pytest.mark.parametrize(
+    "input, expected",
+    [
+        ("3 + 4", "3 4 +"),
+        ("sin ( max ( 2, 3 ) ÷ 3 × π )", "2 3 max 3 ÷ π × sin"),
+        # trololol. Let eval handle repeated calls to neg.
+        ("-----5", "5 neg neg neg neg neg"),
+        ("3--5", "3 5 neg -"),
+    ],
+)
+def test_get_rendered_rpn_tokens(input, expected):
+    input_tokens = enrich(tokenize(input))
+    rpn_tokens = get_rpn_tokens(input_tokens)
+    assert expected == render_tokens(rpn_tokens)
 
 
 # -------------
@@ -35,16 +67,17 @@ def test_get_rpn_tokens(input, expected):
 # -------------
 
 
-@pytest.mark.skip  # FIXME: actually unskip this once implemented ;)
+@pytest.mark.skip  # eval NYI
 @pytest.mark.parametrize(
     "input, expected",
     [
-        ([3, 4, add], 7),
+        ([3, 4, Op(add)], 7),
+        ([3, 4, Fn(neg), add], -1),
         (
             # "sin ( max ( 2, 3 ) ÷ 3 × π )"
             [
-                sin, Special.PAREN_LEFT, max, Special.PAREN_LEFT, 2, 3, Special.PAREN_RIGHT,
-                div, 3, mul, pi, Special.PAREN_RIGHT,
+                2, 3, Fn(max), 3, Op(div),
+                pi, Op(mul), Fn(sin),
             ],
             0,
         ),
@@ -57,9 +90,7 @@ def test_eval_rpn(input, expected):
 # ==================
 # test cases swiped from a friend
 # ==================
-# most of these won't work yet:
-# - [ ] parse negative numbers
-# - [ ] parse 123e4 style numbers
+# TODO: replace "x neg" with "-x" when we are processing tokens
 
 # TEST_CASES = [
 #     {"input": "-3 + -4", "expected": "-3 -4 +"},
