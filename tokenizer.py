@@ -24,7 +24,7 @@
 """
 
 from io import BytesIO
-from token import ENCODING, NEWLINE, ENDMARKER, MINUS, NUMBER
+from token import ENCODING, NEWLINE, ENDMARKER
 from tokenize import tokenize as builtin_tokenize
 from typing import Iterator
 
@@ -51,6 +51,9 @@ def tokenize(input: str) -> Iterator[str]:
     for token in token_stream:
         if token.type in {ENCODING, NEWLINE, ENDMARKER}:
             continue
+        # I don't love that this throws away the
+        # tokenizer's knowledge that this token is a number or MINUS,
+        # but I'm deliberately yielding only strings from this.
         yield token.string
 
 
@@ -67,59 +70,56 @@ def enrich(tokens: Iterator[str]) -> Iterator:
     - math functions -> functions
     - minuses -> neg or subtract functions (which have different arity)
 
-        I want intercept MINUS tokens and yield negative numbers if the minus is followed by a number.
-
-    FIXME: This is completely fucked at trying to recognize negative numbers. :)
-
-     -----5
-     is the same as
-     (-(-(-(-(-5)))))
+    Misc notes:
+        -----5
+        is the same as
+        (-(-(-(-(-5)))))
 
     I'd like to replace e.g. "---5" -> ["-5"]
-    but instead i can just pass `neg` on to the calculation and leave it be.
-    "sin(-5) -> [sin, (, -5, )]
+    but instead I can just pass `neg` on to the calculation and leave it be.
     """
-    _last = None  # the last non-minus token we've seen.
+    last_non_minus = None  # the last non-minus entity we've seen.
 
     for index, token in enumerate(tokens):
         try:
             number = int(token)  # todo: handle floats or ints
-            _last = number
+            last_non_minus = number
             yield number
             continue
-        except:
+        except ValueError:
             pass
 
         try:
             number = float(token)
-            _last = number
+            last_non_minus = number
             yield number
             continue
-        except:
+        except ValueError:
             pass
 
-        # get a function, named constant, operator, or Paren
-        entity = get_entity(token)
-
-        if entity == Special.MINUS:
+        if token == "-":
             if (
                 index == 0  # first token
-                or _last is None  # nth minus in a row since start
-                or _last == Special.PAREN_LEFT
-                or (type(_last) is Operator and _last != neg)
+                or last_non_minus is None  # nth minus in a row since start
+                or last_non_minus == Special.PAREN_LEFT
+                or (type(last_non_minus) is Operator and last_non_minus != neg)
             ):
                 entity = neg
 
             elif (
                 # - we follow a number or a closed paren
-                type(_last) is int or type(_last) is float or _last == Special.PAREN_RIGHT
+                type(last_non_minus) is int
+                or type(last_non_minus) is float
+                or last_non_minus == Special.PAREN_RIGHT
             ):
                 entity = subtract
             else:
-                raise Exception(f"invalid: {entity}, prev non-minus: {_last}")
+                raise Exception(f"Unexpected Minus, prev non-minus: {last_non_minus}")
             yield entity
             continue
 
-        # otherwise, we have a pi or an operator:
-        _last = entity
+        # Otherwise, we have a function, named constant, operator, or Paren
+        entity = get_entity(token)
+
+        last_non_minus = entity
         yield entity
