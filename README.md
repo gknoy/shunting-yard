@@ -6,14 +6,20 @@
 
 ## Setup / Testing
 
-This uses the `uv` and `ruff` tools from Astral.sh.
+This uses the `uv`, `ruff`, and `ty` tools from Astral.sh.
 I am using python 3.13.0, but I forget whether anything needs that specifically (vs 3.11 or lower).
 
 ### uv, ruff tooling
 ```sh
-# install uv
 uv tool install ruff
+uv tool install ty
 uv pip install pytest ipython
+
+# autoformat:
+ruff format .
+
+# type check:
+ty check .
 ```
 
 ### Running tests
@@ -22,3 +28,5 @@ uv pip install pytest ipython
 pytest .
 pytest tests/test_tokenizer.py
 ```
+
+

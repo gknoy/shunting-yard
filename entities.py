@@ -20,22 +20,30 @@ def div(a: number, b: number) -> number:
 
 # unary negation
 def neg(a: number) -> number:
-    return -1 * number
+    return -1 * a
 
 
 class Special(Enum):
     PAREN_LEFT = "("
     PAREN_RIGHT = ")"
     COMMA = ","
+    MINUS = "-"
 
 
 class Callable:
     """base class for Operator and Function"""
 
-    def __init__(self, function: callable, associativity="left", n_args=2):
+    def __init__(
+        self,
+        function: callable,  # ty: ignore[invalid-type-form]
+        associativity="left",
+        n_args=2,
+        rendered: str | None = None,
+    ):
         self.function = function
         self.associativity = associativity
         self.n_args = n_args  # consumers should check this before passing args
+        self.rendered = rendered  # e.g. negation
 
     def __call__(self, *args):
         return self.function(*args)
@@ -66,9 +74,14 @@ class Operator(Callable):
     """
 
     def __init__(
-        self, function: callable, associativity="left", n_args=2, unary: bool | str = False
+        self,
+        function: callable,  # ty: ignore[invalid-type-form]
+        associativity="left",
+        n_args=2,
+        unary: bool | str = False,
+        **kwargs,
     ):
-        super().__init__(function, associativity, n_args)
+        super().__init__(function, associativity, n_args, **kwargs)
         assert unary in (False, "left", "right")
         self.unary = unary
 
@@ -102,10 +115,18 @@ class Function(Callable):
         )
 
 
+# ------
+# Negation / Subtraction
+# ------
+
+neg_op = Operator(neg, n_args=1, unary="left", rendered="neg")
+
+
 entity_mapping = {
     "(": Special.PAREN_LEFT,
     ")": Special.PAREN_RIGHT,
     ",": Special.COMMA,  # used in some function calls, e.g. max(a, b)
+    "-": Special.MINUS,  # can mean either neg or
     # Unlike the built-in ** operator, math.pow() converts
     # both its arguments to type float. Use ** or the built-in pow()
     # function for computing exact integer powers.
@@ -117,14 +138,14 @@ entity_mapping = {
     "+": Operator(operator.add),
     "-": Operator(operator.sub),
     "%": Operator(operator.mod),
-    "neg": Operator(neg, n_args=1, unary="left"),
-    "~": Operator(neg, n_args=1, unary="left"),
-    # Disallow 5!, use factorial(5) instead
-    # mainly because I don't wat to handle "-5!"
-    # "!": Operator(math.factorial, n_args=1, unary="right"),
+    # "neg": Operator(neg, n_args=1, unary="left"),
+    # "~": Operator(neg, n_args=1, unary="left"),
     # abs isn't infix so we don't consider it an "operator"
     "abs": Function(operator.abs, n_args=1),
     "sqrt": Function(math.sqrt, n_args=1),
+    # Disallow 5!, use factorial(5) instead
+    #   mainly because I don't wat to handle "-5!"
+    #   "!": Operator(math.factorial, n_args=1, unary="right"),
     "factorial": Function(math.factorial, n_args=1),
     # numeric literals
     "π": math.pi,
@@ -151,6 +172,8 @@ def get_entity(token: str) -> Entity:
 
 def render(entity: Entity) -> str:
     # renders the first-encountered entity (in case we have two names)
+    if entity.rendered is not None:
+        return entity.rendered
     for name, e in entity_mapping.items():
         if type(e) is type(entity) and e == entity:
             return name
@@ -159,6 +182,8 @@ def render(entity: Entity) -> str:
         return entity.function.__name__
     if type(entity) in [int, float]:
         return entity
+    # fallback to rendering the stringification of something
+    return str(entity)
 
 
 def render_tokens(entities: Iterable[Entity]) -> str:
