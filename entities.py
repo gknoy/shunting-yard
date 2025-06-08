@@ -7,6 +7,7 @@
 import math
 import operator
 from enum import Enum
+from functools import cache
 from typing import Iterable
 
 
@@ -191,5 +192,6 @@ def render_tokens(entities: Iterable[Entity]) -> str:
     return " ".join(render(e) for e in entities)
 
 
+@cache
 def get_precedence(op: Operator | Function) -> int:
     raise NotImplementedError
